@@ -1,17 +1,21 @@
+#%% import
 import sys
 import os
 import logging
 
 from tqdm import tqdm
-from pdfminer.pdfparser import PDFParser, PDFDocument
+from pdfminer.pdfparser import PDFParser
+from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import PDFPageAggregator
+from pdfminer.pdfpage import PDFPage
 from pdfminer.layout import LTTextBoxHorizontal, LAParams
-from pdfminer.pdfinterp import PDFTextExtractionNotAllowed
+from pdfminer.pdfdocument import PDFTextExtractionNotAllowed
 
 
 logging.getLogger().setLevel(logging.ERROR)  # 忽略警告
 
+#%% parse_and_count
 def parse_and_count(path, save_folder='pdf2txts/', journal_path='journal_list.txt', csv=None):
     """
     解析论文 pdf文件， 生成对应 txt文件，并计算该论文的引文有多少属于目标期刊(由 journal_list.txt 自己设定)
@@ -25,10 +29,10 @@ def parse_and_count(path, save_folder='pdf2txts/', journal_path='journal_list.tx
 
     fp = open(path, 'rb')
     praser = PDFParser(fp)
-    doc = PDFDocument()
+    doc = PDFDocument(praser)
     praser.set_document(doc)
-    doc.set_parser(praser)
-    doc.initialize()
+    # doc.set_parser(praser)
+    # doc.initialize()
 
     # 检测文档是否提供txt转换，不提供就忽略
     if not doc.is_extractable:
@@ -43,11 +47,14 @@ def parse_and_count(path, save_folder='pdf2txts/', journal_path='journal_list.tx
         save_path = save_folder + path.split('.')[0].split('/')[-1] + '.txt'
 
         results = []
+        # for every pdf file
         with open(save_path, 'w+', encoding='utf-8') as f:
-            for page in doc.get_pages():  # doc.get_pages() 获取page列表
+            # for each page of pdf file
+            for page in PDFPage.get_pages(fp):  # doc.get_pages() 获取page列表
 
                 interpreter.process_page(page)
                 layout = device.get_result()
+                # for each layout
                 for x in layout:
                     if isinstance(x, LTTextBoxHorizontal):
                         text = x.get_text()
@@ -85,7 +92,7 @@ def parse_and_count(path, save_folder='pdf2txts/', journal_path='journal_list.tx
         write_line = path.split('.')[0].split('/')[-1].replace(',', ' ') + ',' + ','.join(counts)
         csv.write(write_line + '\n')
 
-
+#%% load_j
 def load_journals(journal_path='journal_list.txt'):
     """
     加载期刊列表
@@ -97,7 +104,7 @@ def load_journals(journal_path='journal_list.txt'):
         journals.append(line.strip('\n'))
     return journals
 
-
+#%% solve_J
 def solve_journal_repetition(journal, article, refer_loc, count):
     """
     为了处理Journal of Marketing Research 和 Journal of Marketing 这种字段有重复的期刊，使其不重复计数
@@ -111,7 +118,7 @@ def solve_journal_repetition(journal, article, refer_loc, count):
 
     return count
 
-
+#%% main
 if __name__ == '__main__':
     folder = '2019-2020/'   # 作者的测试文件夹为 2019-2020  即2019-2020年的文献集
     subfolders = os.listdir(folder)
@@ -127,6 +134,6 @@ if __name__ == '__main__':
             'article,' + ','.join(open('journal_list.txt', 'r', encoding='utf-8').readlines()).replace('\n', '') + '\n')
         for file in tqdm(files):
             # print(folder + subfolder + '/' + file)
-            parse_and_count(path=folder + subfolder + '/' + file, save_folder='2019-2020/' + subfolder + 'txt/',
+            parse_and_count(path=folder + subfolder + '/' + file, save_folder=folder + subfolder + 'txt/',
                             journal_path='journal_list.txt',
                             csv=csv)
